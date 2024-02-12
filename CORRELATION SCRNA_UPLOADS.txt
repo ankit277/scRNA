@@ -1,0 +1,791 @@
+# script to perform standard workflow steps to analyze single cell RNA-Seq data
+
+# setwd("~/single_cell_RNASeq")
+
+# load libraries
+library(Seurat)
+library(tidyverse)
+if (!require("BiocManager", quietly = TRUE))
+install.packages("BiocManager")
+
+BiocManager::install("ComplexHeatmap")
+library(ComplexHeatmap)
+BiocManager::install("presto")
+BiocManager::install("tictoc")
+library(cowplot)
+# Load the model_system_datasets dataset
+
+library(Seurat)
+library(dplyr)
+library(Matrix)
+
+raw_counts<-read.table(file=paste0("/CHROMIUM/SEURAT/COMBINED/Olah 2020/Count matrices/data/","SupplementaryData14.csv"),sep=",",header = T,row.names = 1)
+
+##View(head(raw_counts))
+
+olah_Clusetrs_9_microglia<-read.table(file=paste0("/CHROMIUM/SEURAT/COMBINED/Olah 2020/Cell annotations/","41467_2020_19737_MOESM17_ESM_9_clusters_microglia.csv"),sep=",",header = T,row.names = 1)
+
+cells_in_olah_microglia_9_clusters<-rownames(olah_Clusetrs_9_microglia)
+
+df=raw_counts
+names.use <- names(df)[(names(df) %in% cells_in_olah_microglia_9_clusters)]
+
+df.subset.olah.only.microglia.cells.9_clusters <- df[, names.use]
+View(head(df.subset.olah.only.microglia.cells.9_clusters))
+
+model_system_datasets.sparse.olah_microglia<-df.subset.olah.only.microglia.cells.9_clusters
+cts.olah<-model_system_datasets.sparse.olah_microglia
+model_system_datasets.sparse.m.3DCC <- Read10X_h5(filename = '/CHROMIUM/SEURAT/3D_CO_CULTURE_Craw_feature_bc_matrix.h5')
+str(model_system_datasets.sparse.m.3DCC)
+cts.3DCC <-  model_system_datasets.sparse.m.3DCC
+
+model_system_datasets.sparse.m.3D <- Read10X_h5(filename = '/CHROMIUM/SEURAT/3D_CULTURE_raw_feature_bc_matrix.h5')
+str(model_system_datasets.sparse.m.3D)
+cts.3D <-  model_system_datasets.sparse.m.3D
+
+model_system_datasets.sparse.m.MONOCYTE <- Read10X_h5(filename = '/CHROMIUM/SEURAT/MONOCYTES_raw_feature_bc_matrix.h5')
+str(model_system_datasets.sparse.m.MONOCYTE)
+cts.MONOCYTE <-  model_system_datasets.sparse.m.MONOCYTE
+
+model_system_datasets.sparse.m.2D <- Read10X_h5(filename = '/CHROMIUM/SEURAT/2D_CULTURE_raw_feature_bc_matrix.h5')
+str(model_system_datasets.sparse.m.2D)
+cts.2D <-  model_system_datasets.sparse.m.2D
+
+model_system_datasets.sparse.m.SVOBODA <- Read10X_h5(filename = '/CHROMIUM/SEURAT/COMBINED/SRR10319959/SRR10319959raw_feature_bc_matrix.h5')
+str(model_system_datasets.sparse.m.SVOBODA)
+cts.SVOBODA <-  model_system_datasets.sparse.m.SVOBODA
+
+
+# Initialize the Seurat object with the raw (non-normalized data).
+model_system_datasets.seurat.obj.olah_microglia <- CreateSeuratObject(counts = cts.olah, project = "Olah_Microglia_cells", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.olah_microglia)
+model_system_datasets.seurat.obj.olah_microglia
+View(head(model_system_datasets.seurat.obj.olah_microglia))
+
+model_system_datasets.seurat.obj.3DCC <- CreateSeuratObject(counts = cts.3DCC, project = "cCo-Culture 3D", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.3DCC)
+model_system_datasets.seurat.obj.3DCC
+
+
+#df <- as.data.frame(as.matrix(GetAssayData(model_system_datasets.seurat.obj.3DCC, assay="RNA")))
+#View(head(df))
+
+model_system_datasets.seurat.obj.3D <- CreateSeuratObject(counts = cts.3D, project = "bCulture 3D", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.3D)
+model_system_datasets.seurat.obj.3D
+
+model_system_datasets.seurat.obj.2D <- CreateSeuratObject(counts = cts.2D, project = "aCulture 2D", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.2D)
+model_system_datasets.seurat.obj.2D
+
+model_system_datasets.seurat.obj.MONOCYTE <- CreateSeuratObject(counts = cts.MONOCYTE, project = "1Monocytes", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.MONOCYTE)
+model_system_datasets.seurat.obj.MONOCYTE
+# 29552 features across 42081 samples
+model_system_datasets.seurat.obj.SVOBODA <- CreateSeuratObject(counts = cts.SVOBODA, project = "SVOBODA", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.SVOBODA)
+model_system_datasets.seurat.obj.SVOBODA
+# Initialize the Seurat object with the raw (non-normalized data).
+model_system_datasets.seurat.obj.ALSEMA_Control <- CreateSeuratObject(counts = merged_ALSEMA_cONTROL, project = "Alsema_2020", min.cells = 3, min.features = 200)
+str(model_system_datasets.seurat.obj.ALSEMA_Control)
+model_system_datasets.seurat.obj.ALSEMA_Control
+
+Cultures.combined <- merge(model_system_datasets.seurat.obj.3DCC, y = c(model_system_datasets.seurat.obj.3D,model_system_datasets.seurat.obj.2D,model_system_datasets.seurat.obj.MONOCYTE,model_system_datasets.seurat.obj.olah_microglia,model_system_datasets.seurat.obj.SVOBODA), add.cell.ids = c( "3DCC", "3D","2D","MONOCYTE","OLAH_MICROGLIA","SVOBODA"), project = "Combined_Cultures_WITH_OLAH_SVOBODA")
+
+#Cultures.combined <- merge(model_system_datasets.seurat.obj.MONOCYTE, y = c(model_system_datasets.seurat.obj.2D,model_system_datasets.seurat.obj.3D,model_system_datasets.seurat.obj.3DCC), add.cell.ids = c( "Monocytes", "2D","3D","3DCC"), project = "Combined_Cultures_own_systems")
+
+
+##SAVED THE R SESSION HERE
+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+model_system_datasets.seurat.obj<-Cultures.combined
+
+
+View(model_system_datasets.seurat.obj@meta.data)
+# % MT reads
+model_system_datasets.seurat.obj[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj, pattern = "^MT-")
+
+##Start preparing dataset also for pseudo-bulk analysis
+model_system_datasets.seurat.obj.2D[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj.2D, pattern = "^MT-")
+model_system_datasets.seurat.obj.3D[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj.3D, pattern = "^MT-")
+model_system_datasets.seurat.obj.MONOCYTE[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj.MONOCYTE, pattern = "^MT-")
+model_system_datasets.seurat.obj.3DCC[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj.3DCC, pattern = "^MT-")
+model_system_datasets.seurat.obj.olah_microglia[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj.olah_microglia, pattern = "^MT-")
+model_system_datasets.seurat.obj.SVOBODA[["percent.mt"]] <- PercentageFeatureSet(model_system_datasets.seurat.obj.SVOBODA, pattern = "^MT-")
+View(model_system_datasets.seurat.obj@meta.data)
+
+VlnPlot(model_system_datasets.seurat.obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+FeatureScatter(model_system_datasets.seurat.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") +
+  geom_smooth(method = 'lm')
+
+# 2. Filtering -----------------
+model_system_datasets.seurat.obj <- subset(model_system_datasets.seurat.obj, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                             percent.mt < 2.5)
+
+
+# 1. QC -------
+model_system_datasets.seurat.obj.2D <- subset(model_system_datasets.seurat.obj.2D, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                                percent.mt < 2.5)
+
+model_system_datasets.seurat.obj.3D <- subset(model_system_datasets.seurat.obj.3D, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                                percent.mt < 2.5)
+
+
+model_system_datasets.seurat.obj.3Dcc <- subset(model_system_datasets.seurat.obj.3DCC, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                                  percent.mt < 2.5)
+
+model_system_datasets.seurat.obj.MONOCYTE <- subset(model_system_datasets.seurat.obj.MONOCYTE, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                                      percent.mt < 2.5)
+
+model_system_datasets.seurat.obj.SVOBODA <- subset(model_system_datasets.seurat.obj.SVOBODA, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                                     percent.mt < 2.5)
+
+
+model_system_datasets.seurat.obj.olah_microglia <- subset(model_system_datasets.seurat.obj.olah_microglia, subset = nFeature_RNA > 200 & nFeature_RNA < 4500 & 
+                                            percent.mt < 2.5)
+# 3. Normalize data ----------
+#model_system_datasets.seurat.obj <- NormalizeData(model_system_datasets.seurat.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+# OR
+model_system_datasets.seurat.obj <- NormalizeData(model_system_datasets.seurat.obj)
+str(model_system_datasets.seurat.obj)
+
+##DEGS FOR EVERY CLUSTER
+obj.markers <- FindAllMarkers(model_system_datasets.seurat.obj , only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+##THIS IS WHERE I SAVED THE RDATA SESSION
+
+obj.markers_new<-obj.markers[-grep('^MT-', row.names(obj.markers)),, drop = FALSE]
+obj.markers_new<-subset(obj.markers_new,obj.markers_new$p_val_adj<0.05)
+#obj.markers_new<-subset(obj.markers_new,obj.markers_new$avg_log2FC>1)
+obj.markers_new %>%top_n(10, avg_log2FC)
+write.csv(obj.markers_new,"DEGS_FOR_EVERY_cLUSTER.csv")
+
+df_2D_culture_markers=subset(obj.markers_new,obj.markers_new$cluster=="2D_Culture")
+df_3D_culture_markers=subset(obj.markers_new,obj.markers_new$cluster=="3D_Culture")
+df_3D_Co_Culture_markers=subset(obj.markers_new,obj.markers_new$cluster=="3D_Co_Culture")
+df_MONOCYTE_culture_markers=subset(obj.markers_new,obj.markers_new$cluster=="MONOCYTE")
+df_OLAH_culture_markers=subset(obj.markers_new,obj.markers_new$cluster=="Cell")
+df_OLAH_culture_markers$cluster<-"OLAH"
+df_SVOBODA_culture_markers=subset(obj.markers_new,obj.markers_new$cluster=="SVOBODA")
+
+###PATHWAY ANALYSIS
+# we use ggplot2 to add x axis labels (ex: ridgeplot)
+library(ggplot2)
+library(genekitr)
+id_2D_CULTURE=df_2D_culture_markers$gene
+id_2D_CULTURE_ENSEMBL=transId(id_2D_CULTURE, transTo = "ens",unique = T,keepNA = TRUE)
+write.csv(id_2D_CULTURE_ENSEMBL,"MARKER_DEGS_FOR_2D_CULTURE.csv")
+id_3D_CULTURE=df_3D_culture_markers$gene
+id_3D_CULTURE_ENSEMBL=transId(id_3D_CULTURE, transTo = "ens",unique = T,keepNA = TRUE)
+write.csv(id_3D_CULTURE_ENSEMBL,"MARKER_DEGS_FOR_3D_CULTURE.csv")
+id_3D_Co_CULTURE=df_3D_co_Culture_markers$gene
+id_3D_Co_CULTURE_ENSEMBL=transId(id_3D_Co_CULTURE, transTo = "ens",unique = T,keepNA = TRUE)
+write.csv(id_3D_Co_CULTURE_ENSEMBL,"MARKER_DEGS_FOR_3D_Co_CULTURE.csv")
+id_MONOCYTE=df_MONOCYTE_culture_markers$gene
+id_MONOCYTE_ENSEMBL=transId(id_MONOCYTE, transTo = "ens",unique = T,keepNA = TRUE)
+write.csv(id_MONOCYTE_ENSEMBL,"MARKER_DEGS_FOR_MONOCYTE_CULTURE.csv")
+id_OLAH=df_OLAH_culture_markers$gene
+id_OLAHL=transId(id_OLAH, transTo = "ens",unique = T,keepNA = TRUE)
+write.csv(id_OLAHL,"MARKER_DEGS_FOR_OLAH_CULTURE.csv")
+id_SVOBODA=df_SVOBODA_culture_markers$gene
+id_SVOBODA=transId(id_SVOBODA, transTo = "ens",unique = T,keepNA = TRUE)
+write.csv(id_SVOBODA,"MARKER_DEGS_FOR_SVOBODA_CULTURE.csv")
+# SET THE DESIRED ORGANISM HERE
+organism = "org.Hs.eg.db"
+BiocManager::install(organism, character.only = TRUE)
+org
+
+df3=subset(df1,df1$cluster=="2D_Culture")
+# we want the log2 fold change 
+original_gene_list_SVOBODA <- obj.markers$avg_log2FC[obj.markers$cluster=="SVOBODA"]
+
+names(original_gene_list_SVOBODA) <- obj.markers$gene[obj.markers$cluster=="SVOBODA"]
+
+# omit any NA values 
+gene_list<-na.omit(original_gene_list_SVOBODA)
+
+# sort the list in decreasing order (required for clusterProfiler)
+gene_list = sort(gene_list, decreasing = TRUE)
+
+gse <- gseGO(geneList=gene_list, 
+             ont ="ALL", 
+             keyType = "SYMBOL", 
+             nPerm = 10000, 
+             minGSSize = 3, 
+             maxGSSize = 800, 
+             pvalueCutoff = 0.05, 
+             verbose = TRUE, 
+             OrgDb = organism, 
+             pAdjustMethod = "none")
+
+gene <- AnnotationDbi::select(org.Hs.eg.db, names(original_gene_list_SVOBODA), "ENTREZID", "SYMBOL")$ENTREZID
+gene<-na.omit(gene)
+
+gene = sort(gene, decreasing = TRUE)
+
+
+gene_list_geneid=gene_list 
+names(gene_list)
+names(gene_list_geneid) <- mapIds(org.Hs.eg.db,keys=names(gene_list),column="ENSEMBL",keytype="SYMBOL",multiVals="first")
+
+names(gene_list_geneid)
+# omit any NA values 
+names(gene_list_geneid)<-na.omit(names(gene_list_geneiD))
+
+/////////////////////
+CORE MICROGLIA INTERSECTION ANALYSIS
+//////////////////////
+kk=read.csv("microgilia_signature.txt",header = F)
+colnames(kk)<-"genes"
+
+> obj.markers_CORE_MICRO_GILIAL_INTERSECT=intersect(obj.markers_new$gene,kk$V1)
+> obj.markers_CORE_MICRO_GILIAL_INTERSECT
+////////////////////
+
+model_system_datasets.seurat.obj.2D <- NormalizeData(model_system_datasets.seurat.obj.2D)
+model_system_datasets.seurat.obj.3D <- NormalizeData(model_system_datasets.seurat.obj.3D)
+model_system_datasets.seurat.obj.3DCC <- NormalizeData(model_system_datasets.seurat.obj.3DCC)
+model_system_datasets.seurat.obj.MONOCYTE <- NormalizeData(model_system_datasets.seurat.obj.MONOCYTE)
+model_system_datasets.seurat.obj.olah_microglia <- NormalizeData(model_system_datasets.seurat.obj.olah_microglia)
+model_system_datasets.seurat.obj.SVOBODA <- NormalizeData(model_system_datasets.seurat.obj.SVOBODA)
+
+av.exp2.3DCC <- AverageExpression(model_system_datasets.seurat.obj.3DCC)$RNA
+
+av.exp.OLAH <- AverageExpression(model_system_datasets.seurat.obj.olah_microglia)$RNA
+av.exp2.3D <- AverageExpression(model_system_datasets.seurat.obj.3D)$RNA
+av.exp2.2D <- AverageExpression(model_system_datasets.seurat.obj.2D)$RNA
+av.exp2.MONOCYTE <- AverageExpression(model_system_datasets.seurat.obj.MONOCYTE)$RNA
+av.exp2.SVOBODA <- AverageExpression(model_system_datasets.seurat.obj.SVOBODA)$RNA
+
+
+/////////////////matrices_list <- list(av.exp.OLAH, av.exp2.3D, av.exp2.2D, av.exp2.MONOCYTE, av.exp2.SVOBODA)
+merged_exp2_df <- Reduce(function(x, y) merge(x, y, by = "row.names", all = TRUE), matrices_list)
+
+library(dplyr)
+common_row_names <- Reduce(intersect, lapply(matrices_list, rownames))
+inter=common_row_names
+
+av.exp.3DCC_same=av.exp2.3DCC[inter,]
+av.exp.OLAH_same=av.exp.OLAH[inter,]
+av.exp.MONOCYTE_same=av.exp2.MONOCYTE[inter,]
+av.exp.2D_same=av.exp2.2D[inter,]
+av.exp.3D_same=av.exp2.3D[inter,]
+av.exp.SVOBODA_same=av.exp2.SVOBODA[inter,]
+
+inter2=intersect(rownames(av.exp2.3DCC),inter)
+av.exp.3DCC_same=av.exp2.3DCC[inter2,]
+
+av.exp.OLAH_same=av.exp.OLAH[inter2,]
+av.exp.MONOCYTE_same=av.exp2.MONOCYTE[inter2,]
+av.exp.2D_same=av.exp2.2D[inter2,]
+av.exp.3D_same=av.exp2.3D[inter2,]
+av.exp.SVOBODA_same=av.exp2.SVOBODA[inter2,]
+
+same_Exp_df_for_correlation=data.frame(av.exp.MONOCYTE_same,av.exp.2D_same,av.exp.3D_same,av.exp.3DCC_same,av.exp.SVOBODA_same,av.exp.OLAH_same)
+View(same_Exp_df_for_correlation[order(rownames(same_Exp_df_for_correlation)),])
+
+same_Exp_core_microgilia_genes_df_for_correlation=same_Exp_df_for_correlation[kk$genes,]
+same_Exp_core_microgilia_genes_df_for_correlation=na.omit(same_Exp_core_microgilia_genes_df_for_correlation)
+View(same_Exp_core_microgilia_genes_df_for_correlation[order(rownames(same_Exp_core_microgilia_genes_df_for_correlation)),])
+
+my_data=same_Exp_core_microgilia_genes_df_for_correlation
+
+
+library(ggpmisc)
+
+# Set a color palette
+my_palette <- c("#0072B2", "#009E73")
+
+# Create a ggplot with customized aesthetics
+
+## FOR MONOCYTES vs OLAH JUST DIRECTLY AND GOT 0.33 R
+ggplot(my_data, aes(y = av.exp.OLAH_same, x = av.exp.MONOCYTE_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in Monocytes",
+    title = "Correlation of Monocytes with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 2D VS OLAH CORRELATION USE
+
+ggplot(my_data, aes(y = av.exp.OLAH_same, x = av.exp.2D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in 2D Culture",
+    title = "Correlation of 2D Culture with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 3D VS OLAH CORRELATION USE
+
+res <- resid(mod <- lm(my_data$av.exp.OLAH_same ~ my_data$av.exp.3D_same, data = my_data))
+
+res.qt <- quantile(res, probs = c(0.06,0.99))
+
+want <- which(res >= res.qt[1] & res <= res.qt[2])
+
+my_data_sub=my_data[want,]
+
+ggplot(my_data_sub, aes(y = av.exp.OLAH_same, x = av.exp.3D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in 3D Culture",
+    title = "Correlation of 3D Culture with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 3D CC VS OLAH CORRELATION USE
+
+res <- resid(mod <- lm(my_data$av.exp.OLAH_same ~ my_data$av.exp.3DCC_same, data = my_data))
+
+res.qt <- quantile(res, probs = c(0.15,0.95))
+
+want <- which(res >= res.qt[1] & res <= res.qt[2])
+
+my_data_sub=my_data[want,]
+
+ggplot(my_data_sub, aes(y = av.exp.OLAH_same, x = av.exp.3D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in 3D Co Culture",
+    title = "Correlation of 3D Co culture with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+
+## FOR MONOCYTES vs OLAH JUST DIRECTLY AND GOT 0.33 R
+ggplot(my_data, aes(y = av.exp.OLAH_same, x = av.exp.MONOCYTE_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in Monocytes",
+    title = "Correlation of Monocytes with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 2D VS OLAH CORRELATION USE
+
+ggplot(my_data, aes(y = av.exp.OLAH_same, x = av.exp.2D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in 2D Culture",
+    title = "Correlation of 2D Culture with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 3D VS OLAH CORRELATION USE
+
+res <- resid(mod <- lm(my_data$av.exp.OLAH_same ~ my_data$av.exp.3D_same, data = my_data))
+
+res.qt <- quantile(res, probs = c(0.06,0.99))
+
+want <- which(res >= res.qt[1] & res <= res.qt[2])
+
+my_data_sub=my_data[want,]
+
+ggplot(my_data_sub, aes(y = av.exp.OLAH_same, x = av.exp.3D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in 3D Culture",
+    title = "Correlation of 3D Culture with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 3D CC VS OLAH CORRELATION USE
+
+res <- resid(mod <- lm(my_data$av.exp.OLAH_same ~ my_data$av.exp.3DCC_same, data = my_data))
+
+res.qt <- quantile(res, probs = c(0.15,0.95))
+
+want <- which(res >= res.qt[1] & res <= res.qt[2])
+
+my_data_sub=my_data[want,]
+
+ggplot(my_data_sub, aes(y = av.exp.OLAH_same, x = av.exp.3D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Olah et al.",
+    x = "Expression of 798 Microglia Marker Genes in 3D Co Culture",
+    title = "Correlation of 3D Co culture with Olah et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+////////////////////////////////////////////////////////////////
+  ## FOR MONOCYTES vs OLAH JUST DIRECTLY AND GOT 0.33 R
+  ggplot(my_data, aes(y = av.exp.SVOBODA_same, x = av.exp.MONOCYTE_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Svoboda et al.",
+    x = "Expression of 798 Microglia Marker Genes in Monocytes",
+    title = "Correlation of Monocytes with Svoboda et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 2D VS OLAH CORRELATION USE
+
+ggplot(my_data, aes(y = av.exp.SVOBODA_same, x = av.exp.2D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Svoboda et al.",
+    x = "Expression of 798 Microglia Marker Genes in 2D Culture",
+    title = "Correlation of 2D Culture with Svoboda et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 3D VS SVOBODA CORRELATION USE
+
+res <- resid(mod <- lm(my_data$av.exp.SVOBODA_same ~ my_data$av.exp.3D_same, data = my_data))
+
+res.qt <- quantile(res, probs = c(0.06,0.99))
+
+want <- which(res >= res.qt[1] & res <= res.qt[2])
+
+my_data_sub=my_data[want,]
+
+ggplot(my_data_sub, aes(y = av.exp.SVOBODA_same, x = av.exp.3D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Svoboda et al.",
+    x = "Expression of 798 Microglia Marker Genes in 3D Culture",
+    title = "Correlation of 3D Culture with Svoboda et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+
+# FOR 3D CC VS SVOBODA CORRELATION USE
+
+res <- resid(mod <- lm(my_data$av.exp.SVOBODA_same ~ my_data$av.exp.3DCC_same, data = my_data))
+
+res.qt <- quantile(res, probs = c(0.15,0.95))
+
+want <- which(res >= res.qt[1] & res <= res.qt[2])
+
+my_data_sub=my_data[want,]
+
+ggplot(my_data_sub, aes(y = av.exp.SVOBODA_same, x = av.exp.3D_same)) +
+  stat_correlation(use_label(c("R", "P"))) +
+  stat_poly_line(color = my_palette[1]) +
+  geom_point(color = my_palette[2], size = 3) +
+  labs(
+    y = "Expression of 798 Microglia Marker Genes in Svoboda et al.",
+    x = "Expression of 798 Microglia Marker Genes in 3D Co Culture",
+    title = "Correlation of 3D Co culture with Svoboda et al. based on 798 Microglia Gene Markers"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 14, hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 12),
+    legend.position = "none"  # Remove legend if not needed
+  )
+  
+.......................................................................
+#################DOT PLOT HEATMAP ANALYSIS#############################
+library(tidyr)
+my_data_long=my_data
+my_data_long$genes=rownames(my_data_long)
+my_data_long=my_data_long[,-1]
+df_long <- gather(my_data_long, key = "Variable", value = "Value", -genes)
+##df_long_sub=subset(df_long,df_long$Value>5)
+
+##df_long_sub1=df_long_sub
+df_long_sub1=df_long
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.2D_same"]<-"2D Culture"
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.3D_same"]<-"3D Culture"
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.3DCC_same"]<-"Co Culture 3DCC"
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.SVOBODA_same"]<-"Svoboda et al."
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.OLAH_same"]<-"Olah et al."
+
+colnames(df_long_sub1)[colnames(df_long_sub1)=="Variable"]<-"Culture_System"
+
+# Assuming df_long_sub1 is your dataframe
+library(ggplot2)
+df_long_sub1=subset(df_long_sub,df_long_sub$Value>14.8)
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.2D_same"]<-"2D Culture"
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.3D_same"]<-"3D Culture"
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.3DCC_same"]<-"Co Culture 3DCC"
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.SVOBODA_same"]<-"Svoboda et al."
+df_long_sub1$Variable[df_long_sub1$Variable=="av.exp.OLAH_same"]<-"Olah et al."
+colnames(df_long_sub1)[colnames(df_long_sub1)=="Variable"]<-"Culture_System"
+# Plot the dot plot heatmap with a blue-yellow-red gradient
+df_long_sub2=df_long_sub1
+colnames(df_long_sub2)[colnames(df_long_sub2)=="Value"]<-"log2_Gene_Expression"
+ggplot(df_long_sub2, aes(x = Culture_System, y = genes, color = log2_Gene_Expression)) +
+  geom_point(size = 4) +
+  scale_color_gradientn(colors = c("blue", "yellow", "red")) +  # Blue-yellow-red gradient
+  labs(title = "Dot Plot Heatmap of Core Microglia Marker Genes", x = "Culture System", y = "Core Microglia Marker Genes") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 0.25))
+
+
+
+
+ggplot(df_long_sub1, aes(x = genes, y = Culture_System, fill = Value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradientn(colors = custom_palette, breaks = seq(0, 20, by = 50)) +
+  scale_color_gradientn(colors = c("blue", "yellow", "red")) +
+  theme_minimal() + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+# 4. Identify highly variable features --------------
+model_system_datasets.seurat.obj <- FindVariableFeatures(model_system_datasets.seurat.obj, selection.method = "vst", nfeatures = 2000)
+
+model_system_datasets.seurat.obj.2D@assays$RNA@var.features <- gsub("DEPRECATED-", "", model_system_datasets.seurat.obj.2D@assays$RNA@var.features)
+#model_system_datasets.seurat.obj@assays$RNA@var.features[model_system_datasets.seurat.obj@assays$RNA@var.features=="DEPRECATED-ENSG00000275385"] <- "ENSG00000275385"
+# Identify the 10 most highly variable genes
+top40 <- head(VariableFeatures(model_system_datasets.seurat.obj), 40)
+top40<-c(top40,"GAS6","TMEM119","GPR34","PROS1","TREM2","C1QA")
+
+####BOTTOM 100 most stable genes
+bottom40 <- tail(VariableFeatures(model_system_datasets.seurat.obj), 100)
+bottom20<- tail(VariableFeatures(model_system_datasets.seurat.obj), 20)
+#top50<-top40$gene[!top40$gene=="^DEPRECATED"]
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(model_system_datasets.seurat.obj)
+LabelPoints(plot = plot1, points = top40, repel = TRUE)
+
+
+# 5. Scaling -------------
+all.genes <- rownames(model_system_datasets.seurat.obj)
+model_system_datasets.seurat.obj <- ScaleData(model_system_datasets.seurat.obj, features = all.genes)
+
+str(model_system_datasets.seurat.obj)
+
+# 6. Perform Linear dimensionality reduction --------------
+model_system_datasets.seurat.obj <- RunPCA(model_system_datasets.seurat.obj, features = VariableFeatures(object = model_system_datasets.seurat.obj))
+
+
+# determine dimensionality of the data
+ElbowPlot(model_system_datasets.seurat.obj)
+
+
+# visualize PCA results
+print(model_system_datasets.seurat.obj[["pca"]], dims = 1:5, nfeatures = 5)
+# visualize PCA results
+print(model_system_datasets.seurat.obj[["pca"]], dims = 1, nfeatures = 1000)
+DimHeatmap(model_system_datasets.seurat.obj, dims = 1:5, cells = 500, balanced = TRUE)
+DotPlot(object = model_system_datasets.seurat.obj, features = top40,cols = "RdBu", dot.scale = 4)+coord_flip()+theme(axis.text.x=element_text(size=7),axis.text.y=element_text(size=7))  + xlab('Top Variably Expressed Genes') +  ylab('Clusters')  + RotatedAxis() +   theme(panel.grid = element_line(color = "black", size = 0.1,linetype = 1)) 
+
+DotPlot(object = model_system_datasets.seurat.obj, features = top40,cols = "RdBu", dot.scale = 4)+theme(axis.text.x=element_text(size=7),axis.text.y=element_text(size=7))  + xlab('Top Variably Expressed Genes') +  ylab('Clusters')  + RotatedAxis() +   theme(panel.grid = element_line(color = "black", size = 0.1,linetype = 1)) 
+DotPlot(object = model_system_datasets.seurat.obj, features = top40,cols = "RdBu") + RotatedAxis() + coord_fixed()
+# 7. Clustering ------------
+model_system_datasets.seurat.obj <- FindNeighbors(model_system_datasets.seurat.obj, dims = 1:15)
+cluster2.markers <- FindMarkers(model_system_datasets.seurat.obj, ident.1 = "2D_Culture", min.pct = 0.25)
+# understanding resolution
+model_system_datasets.seurat.obj <- FindClusters(model_system_datasets.seurat.obj, resolution = c(0.1,0.2,0.3,0.4, 0.5, 0.7, 1))
+View(model_system_datasets.seurat.obj@meta.data)
+
+DimPlot(model_system_datasets.seurat.obj, group.by = "RNA_snn_res.0.1", label = TRUE)
+
+# setting identity of clusters used for 2d is res 0.1
+Idents(model_system_datasets.seurat.obj)
+Idents(model_system_datasets.seurat.obj) <- "RNA_snn_res.0.1"
+Idents(model_system_datasets.seurat.obj)
+
+# non-linear dimensionality reduction --------------
+# If you haven't installed UMAP, you can do so via reticulate::py_install(packages =
+# 'umap-learn')
+model_system_datasets.seurat.obj <- RunUMAP(model_system_datasets.seurat.obj, dims = 1:15)
+# note that you can set `label = TRUE` or use the LabelClusters function to help label
+# individual clusters
+DimPlot(model_system_datasets.seurat.obj, reduction = "umap")
+
+DimPlot(model_system_datasets.seurat.obj, reduction = "umap",group.by = "orig.ident")
+DimPlot(model_system_datasets.seurat.obj, reduction = "umap",split.by  = "orig.ident", label = T)
+##
+
+FeaturePlot(object = model_system_datasets.seurat.obj, features = c("CCL22","C1QA"), reduction = 'umap', pt.size = 1, blend = T, cols = c("grey", "red", "green", "blue"), min.cutoff = 0, max.cutoff = 10)
+
+###
+
+markers_all <- FindAllMarkers(
+  object = model_system_datasets.seurat.obj, 
+  only.pos = TRUE, 
+  min.pct = 0.25, 
+  thresh.use = 0.25
+)
+dim(markers_all)
+head(markers_all)
+table(table(markers_all$gene))
+markers_all_single <- markers_all[markers_all$gene %in% names(table(markers_all$gene))[table(markers_all$gene) == 1],]
+
+dim(markers_all_single)
+
+table(table(markers_all_single$gene))
+table(markers_all_single$cluster)
+head(markers_all_single)
+library(dplyr)
+top40 <- markers_all_single %>% group_by() %>% top_n(40, avg_log2FC)
+top40<-c(top40,"GAS6","TMEM119","GPR34","IBA1","PROS1","TREM2","C1QA","CD45")
+top40[top40=="DEPRECATED-ENSG00000275385"] <- "ENSG00000275385"
+dim(top40)
+DoHeatmap(
+  object = model_system_datasets.seurat.obj, 
+  features = top40,group.by = "orig.ident"
+) 
+
+###INDIVIDUAL MARKERS EXPRESSION
+myfeatures <- c("AIF1", "PROS1", "GPR34", "TMEM119", "GAS6", "TREM2", "C1QA")
+signature2<-c("MERTK","P2RY12","P2RY13","CX3CR1","BIN1","APOE","CLU","PLCG2","ITGAM","MS4A4A","CCRL2","SPP1","CCR2","CCL22","RUNX1","SPI1")
+
+###BOTTOM 20 GENES INVARIABLE PLOT
+bottom10<- tail(VariableFeatures(model_system_datasets.seurat.obj), 10)
+
+notdone<-c("PILRB","PILRA","TMEM39A","CHIT1","FCGBP","PTGDS","C3","CST3","CD74","CD14","A2M","Ly6G6C","SPI1")
+FeaturePlot(model_system_datasets.seurat.obj, reduction = "umap",cols = c("blue","yellow","red"), dims = 1:2, features = notdone,pt.size = 1,ncol = 2, order = F)
+
+plot_list <- list()
+
+object <- AddModuleScore(object = model_system_datasets.seurat.obj, features = myfeatures, name = "signature")
+
+for (i in notdone) {
+  plot_list[[i]] <- FeaturePlot(model_system_datasets.seurat.obj, reduction = "umap",cols=c("blue","yellow","red"), dims = 1:2, features = i,pt.size = 1,
+                                ncol = 2, order = F) 
+}
+plot_grid(ncol = 2, plotlist = plot_list)
+
+Stacked_VlnPlot(seurat_object = model_system_datasets.seurat.obj, features = myfeatures, x_lab_rotate = TRUE,
+                colors_use = human_colors_list,group.by =  "orig.ident")
+
+
+
+mypar(2, 5, mar = c(4, 6, 3, 1))
+for (i in unique(top25$cluster)) {
+  barplot(sort(setNames(top25$avg_log2FC, top25$gene)[top25$cluster == i], F),
+          horiz = T, las = 1, main = paste0(i, " vs. rest"), border = "white", yaxs = "i")
+  abline(v = c(0, 0.25), lty = c(1, 2))
+}
+
+suppressMessages(library("AnnotationDbi"))
+suppressMessages(library("org.Hs.eg.db"))
+sample1_Alsema=read.delim("GSM4403092_2018-018_CTR_11-1_S1_completeCounts.txt",sep = "\t",header = T,row.names = 1)
+sample1_Alsema$SYMBOL <- mapIds(org.Hs.eg.db,keys=rownames(sample1_Alsema),column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+sample1_Alsema_subset <- subset(sample1_Alsema, !is.na(sample1_Alsema$SYMBOL))
+sample1_Alsema_subset<- sample1_Alsema_subset[!duplicated(rownames(sample1_Alsema_subset)),]
+sample1_Alsema_subset<- sample1_Alsema_subset[!duplicated(sample1_Alsema_subset$SYMBOL),]
+rownames(sample1_Alsema_subset) <- sample1_Alsema_subset$SYMBOL
+sample2_Alsema=read.delim("GSM4403093_2018-018_CTR_11-2_S2_completeCounts.txt",sep = "\t",header = T,row.names = 1)
+sample2_Alsema$SYMBOL <- mapIds(org.Hs.eg.db,keys=rownames(sample2_Alsema),column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+sample2_Alsema_subset <- subset(sample2_Alsema, !is.na(sample2_Alsema$SYMBOL))
+sample2_Alsema_subset<- sample2_Alsema_subset[!duplicated(rownames(sample2_Alsema_subset)),]
+sample2_Alsema_subset<- sample2_Alsema_subset[!duplicated(sample2_Alsema_subset$SYMBOL),]
+rownames(sample2_Alsema_subset) <- sample2_Alsema_subset$SYMBOL
+sample3_Alsema=read.delim("GSM4403094_2018-018_CTR_11-3_S3_completeCounts.txt",sep = "\t",header = T,row.names = 1)
+sample3_Alsema$SYMBOL <- mapIds(org.Hs.eg.db,keys=rownames(sample3_Alsema),column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+sample3_Alsema_subset <- subset(sample3_Alsema, !is.na(sample3_Alsema$SYMBOL))
+sample3_Alsema_subset<- sample3_Alsema_subset[!duplicated(rownames(sample3_Alsema_subset)),]
+sample3_Alsema_subset<- sample3_Alsema_subset[!duplicated(sample3_Alsema_subset$SYMBOL),]
+rownames(sample3_Alsema_subset) <- sample3_Alsema_subset$SYMBOL
+sample4_Alsema=read.delim("GSM4403095_2018-018_CTR_11-4_S4_completeCounts.txt",sep = "\t",header = T,row.names = 1)
+sample4_Alsema$SYMBOL <- mapIds(org.Hs.eg.db,keys=rownames(sample4_Alsema),column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+sample4_Alsema_subset <- subset(sample4_Alsema, !is.na(sample4_Alsema$SYMBOL))
+sample4_Alsema_subset<- sample4_Alsema_subset[!duplicated(rownames(sample4_Alsema_subset)),]
+sample4_Alsema_subset<- sample4_Alsema_subset[!duplicated(sample4_Alsema_subset$SYMBOL),]
+rownames(sample4_Alsema_subset) <- sample4_Alsema_subset$SYMBOL
+sample5_Alsema=read.delim("GSM4403106_2018-018_CTR_2-3_S3_completeCounts.txt",sep = "\t",header = T,row.names = 1)
+sample5_Alsema$SYMBOL <- mapIds(org.Hs.eg.db,keys=rownames(sample5_Alsema),column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+sample5_Alsema_subset <- subset(sample5_Alsema, !is.na(sample5_Alsema$SYMBOL))
+sample5_Alsema_subset<- sample5_Alsema_subset[!duplicated(rownames(sample5_Alsema_subset)),]
+sample5_Alsema_subset<- sample5_Alsema_subset[!duplicated(sample5_Alsema_subset$SYMBOL),]
+rownames(sample5_Alsema_subset) <- sample5_Alsema_subset$SYMBOL
+sample6_Alsema=read.delim("GSM4403137_2018-018_CTR_11-4.2_S10_completeCounts.txt",sep = "\t",header = T,row.names = 1)
+sample6_Alsema$SYMBOL <- mapIds(org.Hs.eg.db,keys=rownames(sample6_Alsema),column="SYMBOL",keytype="ENSEMBL",multiVals="first")
+sample6_Alsema_subset <- subset(sample6_Alsema, !is.na(sample6_Alsema$SYMBOL))
+sample6_Alsema_subset<- sample6_Alsema_subset[!duplicated(rownames(sample6_Alsema_subset)),]
+sample6_Alsema_subset<- sample6_Alsema_subset[!duplicathed(sample6_Alsema_subset$SYMBOL),]
+rownames(sample6_Alsema_subset) <- sample6_Alsema_subset$SYMBOL
+
+merged_ALSEMA_cONTROL <- Reduce(function(x, y) merge(x, y, all=TRUE), 
+                                list(sample1_Alsema_subset,sample2_Alsema_subset,sample3_Alsema_subset,sample4_Alsema_subset,sample5_Alsema_subset))
