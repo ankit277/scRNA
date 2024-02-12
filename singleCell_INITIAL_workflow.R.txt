@@ -1,0 +1,95 @@
+    
+
+# setwd("~/single_cell_RNASeq/scripts")
+
+# load libraries
+library(Seurat)
+library(tidyverse)
+
+# Load the MODEL_SYSTEMS dataset
+MODEL_SYSTEMS.sparse.m <- Read10X_h5(filename = 'C:/Users/ankit.shukla/OneDrive - Thermo Fisher Scientific/Documents/CHROMIUM/SEURAT/MONOCYTES_raw_feature_bc_matrix.h5')
+str(MODEL_SYSTEMS.sparse.m)
+cts <-  MODEL_SYSTEMS.sparse.m$`Gene Expression`
+
+
+
+# Initialize the Seurat object with the raw (non-normalized data).
+MODEL_SYSTEMS.seurat.obj <- CreateSeuratObject(counts = cts, project = "MODEL_SYSTEMS", min.cells = 3, min.features = 200)
+str(MODEL_SYSTEMS.seurat.obj)
+MODEL_SYSTEMS.seurat.obj
+# 29552 features across 42081 samples
+
+
+
+# 1. QC -------
+View(MODEL_SYSTEMS.seurat.obj@meta.data)
+# % MT reads
+MODEL_SYSTEMS.seurat.obj[["percent.mt"]] <- PercentageFeatureSet(MODEL_SYSTEMS.seurat.obj, pattern = "^MT-")
+View(MODEL_SYSTEMS.seurat.obj@meta.data)
+
+VlnPlot(MODEL_SYSTEMS.seurat.obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+FeatureScatter(MODEL_SYSTEMS.seurat.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") +
+  geom_smooth(method = 'lm')
+
+# 2. Filtering -----------------
+MODEL_SYSTEMS.seurat.obj <- subset(MODEL_SYSTEMS.seurat.obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & 
+                          percent.mt < 5)
+
+# 3. Normalize data ----------
+#MODEL_SYSTEMS.seurat.obj <- NormalizeData(MODEL_SYSTEMS.seurat.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+# OR
+MODEL_SYSTEMS.seurat.obj <- NormalizeData(MODEL_SYSTEMS.seurat.obj)
+str(MODEL_SYSTEMS.seurat.obj)
+
+
+# 4. Identify highly variable features --------------
+MODEL_SYSTEMS.seurat.obj <- FindVariableFeatures(MODEL_SYSTEMS.seurat.obj, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(MODEL_SYSTEMS.seurat.obj), 10)
+
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(MODEL_SYSTEMS.seurat.obj)
+LabelPoints(plot = plot1, points = top10, repel = TRUE)
+
+
+# 5. Scaling -------------
+all.genes <- rownames(MODEL_SYSTEMS.seurat.obj)
+MODEL_SYSTEMS.seurat.obj <- ScaleData(MODEL_SYSTEMS.seurat.obj, features = all.genes)
+
+str(MODEL_SYSTEMS.seurat.obj)
+
+# 6. Perform Linear dimensionality reduction --------------
+MODEL_SYSTEMS.seurat.obj <- RunPCA(MODEL_SYSTEMS.seurat.obj, features = VariableFeatures(object = MODEL_SYSTEMS.seurat.obj))
+
+# visualize PCA results
+print(MODEL_SYSTEMS.seurat.obj[["pca"]], dims = 1:5, nfeatures = 5)
+DimHeatmap(MODEL_SYSTEMS.seurat.obj, dims = 1, cells = 500, balanced = TRUE)
+
+
+# determine dimensionality of the data
+ElbowPlot(MODEL_SYSTEMS.seurat.obj)
+
+
+# 7. Clustering ------------
+MODEL_SYSTEMS.seurat.obj <- FindNeighbors(MODEL_SYSTEMS.seurat.obj, dims = 1:15)
+
+# understanding resolution
+MODEL_SYSTEMS.seurat.obj <- FindClusters(MODEL_SYSTEMS.seurat.obj, resolution = c(0.1,0.3, 0.5, 0.7, 1))
+View(MODEL_SYSTEMS.seurat.obj@meta.data)
+
+DimPlot(MODEL_SYSTEMS.seurat.obj, group.by = "RNA_snn_res.0.5", label = TRUE)
+
+# setting identity of clusters
+Idents(MODEL_SYSTEMS.seurat.obj)
+Idents(MODEL_SYSTEMS.seurat.obj) <- "RNA_snn_res.0.1"
+Idents(MODEL_SYSTEMS.seurat.obj)
+
+# non-linear dimensionality reduction --------------
+# If you haven't installed UMAP, you can do so via reticulate::py_install(packages =
+# 'umap-learn')
+MODEL_SYSTEMS.seurat.obj <- RunUMAP(MODEL_SYSTEMS.seurat.obj, dims = 1:15)
+# note that you can set `label = TRUE` or use the LabelClusters function to help label
+# individual clusters
+DimPlot(MODEL_SYSTEMS.seurat.obj, reduction = "umap")
+
