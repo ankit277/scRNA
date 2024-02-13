@@ -1,0 +1,1 @@
+./cellranger-7.1.0/cellranger multi --id count_Monocytes --csv HLA_Monocytes_singleplex_config1.csv --description monocystes_only --localcores 2 --localmem 4

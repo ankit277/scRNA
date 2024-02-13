@@ -1,0 +1,2 @@
+./cellranger-7.1.0/cellranger count --id count_Monocytes --transcriptome refdata-gex-GRCh38-2020-A/ --fastqs monocytes/ --sample HQ1_ULAmonocytes --expect-cells 10000 --localcores 2 --localmem 4 --r1-length 28 --r2-le
+ngth 90
